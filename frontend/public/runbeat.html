@@ -183,6 +183,8 @@ body{
   background:var(--surface-2); border:1px solid transparent; cursor:pointer; font-size:13px;
 }
 .playlist-item.playing{ border-color:var(--coral); background:rgba(255,107,122,.10); }
+.playlist-item.placeholder{ border-style:dashed; opacity:.7; }
+.playlist-item.placeholder .nm{ font-style:italic; color:var(--text-dim); }
 .playlist-item .idx{ width:18px; text-align:center; color:var(--text-dim); font-family:var(--mono); font-size:11px; flex-shrink:0; }
 .playlist-item .nm{ flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .playlist-item .rm{ color:var(--text-dim); font-size:14px; padding:2px 4px; flex-shrink:0; }
@@ -200,6 +202,57 @@ input[type=file].hidden-file{
 .upload-row label{
   flex:1; text-align:center; padding:10px; border-radius:12px; border:1px dashed var(--line);
   color:var(--text-dim); font-size:12.5px; cursor:pointer;
+}
+.share-row{ margin-top:8px; display:flex; gap:8px; }
+.share-btn{
+  flex:1; padding:9px 10px; border-radius:12px; border:1px solid var(--line);
+  background:var(--surface-2); color:var(--text-dim); font-size:12px; cursor:pointer;
+  font-family:inherit; transition:color .15s ease, border-color .15s ease;
+}
+.share-btn:hover{ color:var(--text); border-color:var(--coral); }
+.share-btn:active{ transform:scale(.98); }
+
+/* share modal */
+.share-modal{
+  position:fixed; inset:0; background:rgba(0,0,0,.55); display:none;
+  align-items:center; justify-content:center; z-index:100; padding:20px;
+  backdrop-filter:blur(6px);
+}
+.share-modal.open{ display:flex; }
+.share-modal .box{
+  background:var(--surface); border:1px solid var(--line); border-radius:20px;
+  padding:22px 20px; width:100%; max-width:380px; color:var(--text);
+}
+.share-modal h3{ margin:0 0 6px; font-family:var(--display); font-size:20px; }
+.share-modal p{ margin:0 0 14px; color:var(--text-dim); font-size:13px; line-height:1.45; }
+.share-modal textarea{
+  width:100%; box-sizing:border-box; min-height:70px; background:var(--surface-2);
+  border:1px solid var(--line); border-radius:12px; padding:10px 12px; color:var(--text);
+  font-family:var(--mono); font-size:12px; resize:none;
+}
+.share-modal ul{
+  margin:0 0 12px; padding:0; list-style:none; max-height:180px; overflow-y:auto;
+  background:var(--surface-2); border-radius:12px; border:1px solid var(--line);
+}
+.share-modal ul li{
+  padding:9px 12px; border-bottom:1px solid var(--line); font-size:13px;
+  display:flex; align-items:center; gap:8px;
+}
+.share-modal ul li:last-child{ border-bottom:none; }
+.share-modal ul li .idx{ color:var(--text-dim); font-family:var(--mono); font-size:11px; }
+.share-modal .actions{ display:flex; gap:8px; margin-top:14px; }
+.share-modal .actions button{
+  flex:1; padding:11px; border-radius:12px; border:none; cursor:pointer;
+  font-family:inherit; font-weight:600; font-size:13px;
+}
+.share-modal .actions .primary{
+  background:linear-gradient(90deg,var(--coral),var(--lime)); color:#1c1020;
+}
+.share-modal .actions .ghost{
+  background:transparent; color:var(--text-dim); border:1px solid var(--line);
+}
+.share-modal .toast{
+  font-size:12px; color:var(--lime); margin-top:8px; min-height:16px;
 }
 
 /* history */
@@ -380,8 +433,7 @@ p.subtitle{ color:var(--text-dim); font-size:13px; margin-bottom:6px; }
 
 <div class="app hidden" data-theme="dark" id="app">
 
-  <div class="topbar">
-    <div class="brand">
+  <div class="topbar">    <div class="brand">
       <div class="mark">RB</div>
       <h1>RunBeat</h1>
     </div>
@@ -437,6 +489,10 @@ p.subtitle{ color:var(--text-dim); font-size:13px; margin-bottom:6px; }
         <div class="upload-row">
           <label for="fileInput">📁 Adicionar músicas do dispositivo</label>
           <input type="file" id="fileInput" class="hidden-file" accept="audio/*" multiple>
+        </div>
+        <div class="share-row">
+          <button id="sharePlaylistBtn" class="share-btn" type="button">🔗 Compartilhar playlist</button>
+          <button id="importPlaylistBtn" class="share-btn" type="button">📥 Importar</button>
         </div>
         <div id="playlistBox"></div>
         <audio id="audioEl"></audio>
@@ -517,6 +573,21 @@ p.subtitle{ color:var(--text-dim); font-size:13px; margin-bottom:6px; }
     <button data-screen="goals"><span class="ic">🏅</span>Metas</button>
     <button data-screen="profile"><span class="ic">👤</span>Perfil</button>
   </nav>
+</div>
+
+<!-- SHARE PLAYLIST MODAL (fora de #app para funcionar em qualquer tela) -->
+<div class="share-modal" id="shareModal" role="dialog" aria-modal="true">
+  <div class="box">
+    <h3 id="shareModalTitle">Compartilhar playlist</h3>
+    <p id="shareModalDesc">Envie este link para seus parceiros de corrida. Eles verão a lista das suas faixas e poderão montar a mesma playlist com os arquivos do dispositivo deles.</p>
+    <ul id="shareModalList"></ul>
+    <textarea id="shareModalLink" readonly></textarea>
+    <div class="toast" id="shareModalToast"></div>
+    <div class="actions">
+      <button class="ghost" id="shareModalClose" type="button">Fechar</button>
+      <button class="primary" id="shareModalAction" type="button">Copiar link</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -658,9 +729,9 @@ p.subtitle{ color:var(--text-dim); font-size:13px; margin-bottom:6px; }
       return;
     }
     box.innerHTML = `<div class="playlist">${playlist.map((t,i)=>`
-      <div class="playlist-item ${i===currentIndex?'playing':''}" data-i="${i}">
+      <div class="playlist-item ${i===currentIndex?'playing':''} ${t.placeholder?'placeholder':''}" data-i="${i}">
         <span class="idx">${i+1}</span>
-        <span class="nm">${t.name}</span>
+        <span class="nm">${t.placeholder?'🔍 ':''}${t.name}</span>
         <span class="rm" data-rm="${i}" title="Remover">✕</span>
       </div>`).join('')}</div>`;
     box.querySelectorAll('.playlist-item').forEach(el=>{
@@ -679,8 +750,12 @@ p.subtitle{ color:var(--text-dim); font-size:13px; margin-bottom:6px; }
 
   function playTrack(i){
     if(i < 0 || i >= playlist.length) return;
-    currentIndex = i;
     const t = playlist[i];
+    if(t.placeholder){
+      $('trackArtist').textContent = 'Adicione o arquivo desta faixa (📁)';
+      return;
+    }
+    currentIndex = i;
     audioEl.src = t.url;
     audioEl.load();
     audioEl.play().catch(()=>{});
@@ -691,7 +766,7 @@ p.subtitle{ color:var(--text-dim); font-size:13px; margin-bottom:6px; }
 
   function removeTrack(i){
     const wasCurrent = i === currentIndex;
-    URL.revokeObjectURL(playlist[i].url);
+    if(playlist[i].url) URL.revokeObjectURL(playlist[i].url);
     playlist.splice(i,1);
     if(playlist.length === 0){
       currentIndex = -1;
@@ -712,24 +787,41 @@ p.subtitle{ color:var(--text-dim); font-size:13px; margin-bottom:6px; }
       $('trackArtist').textContent = 'Nenhum arquivo foi selecionado';
       return;
     }
-    const startEmpty = playlist.length === 0;
+    const startEmpty = playlist.length === 0 || playlist.every(t=>t.placeholder);
     let added = 0;
+    let filled = 0;
+    const normalize = s => s.toLowerCase().replace(/[^a-z0-9]+/gi,'').trim();
     files.forEach(f=>{
       try{
         const url = URL.createObjectURL(f);
-        playlist.push({ name: f.name.replace(/\.[^/.]+$/, '') || 'Faixa sem nome', url });
-        added++;
+        const cleanName = f.name.replace(/\.[^/.]+$/, '') || 'Faixa sem nome';
+        // tenta preencher um placeholder com nome parecido
+        const key = normalize(cleanName);
+        const phIdx = playlist.findIndex(t => t.placeholder && normalize(t.name) === key);
+        if(phIdx !== -1){
+          playlist[phIdx] = { name: cleanName, url };
+          filled++;
+        } else {
+          playlist.push({ name: cleanName, url });
+          added++;
+        }
       }catch(err){
         console.error('Falha ao adicionar arquivo:', f.name, err);
       }
     });
     renderPlaylist();
-    if(added === 0){
+    const total = added + filled;
+    if(total === 0){
       $('trackArtist').textContent = 'Não foi possível ler o(s) arquivo(s)';
     } else if(startEmpty){
-      playTrack(0);
+      // toca a primeira faixa não-placeholder
+      const firstReal = playlist.findIndex(t=>!t.placeholder);
+      if(firstReal !== -1) playTrack(firstReal);
     } else {
-      $('trackArtist').textContent = `${added} música(s) adicionada(s) à fila`;
+      const parts = [];
+      if(filled) parts.push(`${filled} faixa(s) da playlist preenchida(s)`);
+      if(added) parts.push(`${added} adicionada(s) à fila`);
+      $('trackArtist').textContent = parts.join(' · ');
     }
     e.target.value = ''; // allow re-adding the same file later
   });
@@ -738,6 +830,131 @@ p.subtitle{ color:var(--text-dim); font-size:13px; margin-bottom:6px; }
   audioEl.addEventListener('error', ()=>{
     $('trackArtist').textContent = 'Não foi possível reproduzir esta faixa';
   });
+
+  /* ---------------- SHARE / IMPORT PLAYLIST ---------------- */
+  // Codifica UTF-8 -> base64 URL-safe (compatível com nomes acentuados)
+  function encodePlaylist(names){
+    const json = JSON.stringify(names);
+    const b64 = btoa(unescape(encodeURIComponent(json)));
+    return b64.replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  }
+  function decodePlaylist(code){
+    try{
+      let b64 = code.replace(/-/g,'+').replace(/_/g,'/');
+      while(b64.length % 4) b64 += '=';
+      const json = decodeURIComponent(escape(atob(b64)));
+      const arr = JSON.parse(json);
+      return Array.isArray(arr) ? arr.filter(n=>typeof n==='string') : null;
+    }catch{ return null; }
+  }
+  function buildShareUrl(names){
+    const base = location.origin + location.pathname;
+    return `${base}#playlist=${encodePlaylist(names)}`;
+  }
+
+  const shareModal = $('shareModal');
+  const shareList = $('shareModalList');
+  const shareLink = $('shareModalLink');
+  const shareToast = $('shareModalToast');
+  const shareTitle = $('shareModalTitle');
+  const shareDesc = $('shareModalDesc');
+  const shareAction = $('shareModalAction');
+  let shareMode = 'share'; // 'share' | 'import'
+  let pendingImport = [];
+
+  function closeShareModal(){ shareModal.classList.remove('open'); shareToast.textContent=''; }
+  $('shareModalClose').addEventListener('click', closeShareModal);
+  shareModal.addEventListener('click', e=>{ if(e.target === shareModal) closeShareModal(); });
+
+  function openShareView(){
+    if(playlist.length === 0){
+      alert('Adicione músicas antes de compartilhar sua playlist.');
+      return;
+    }
+    shareMode = 'share';
+    shareTitle.textContent = 'Compartilhar playlist';
+    shareDesc.textContent = 'Envie este link para seus parceiros de corrida. Eles verão a lista das suas faixas e poderão montar a mesma playlist com os arquivos do dispositivo deles.';
+    shareLink.style.display = '';
+    shareList.innerHTML = playlist.map((t,i)=>`<li><span class="idx">${i+1}</span>${escapeHtml(t.name)}</li>`).join('');
+    shareLink.value = buildShareUrl(playlist.map(t=>t.name));
+    shareAction.textContent = 'Copiar link';
+    shareToast.textContent = '';
+    shareModal.classList.add('open');
+  }
+
+  function openImportView(names){
+    shareMode = 'import';
+    pendingImport = names;
+    shareTitle.textContent = 'Playlist recebida';
+    shareDesc.textContent = `${names.length} faixa(s) sugerida(s). Adicione à sua fila e depois escolha os arquivos do seu dispositivo com os mesmos nomes.`;
+    shareLink.style.display = 'none';
+    shareList.innerHTML = names.map((n,i)=>`<li><span class="idx">${i+1}</span>${escapeHtml(n)}</li>`).join('');
+    shareAction.textContent = 'Adicionar à fila';
+    shareToast.textContent = '';
+    shareModal.classList.add('open');
+  }
+
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+  shareAction.addEventListener('click', async ()=>{
+    if(shareMode === 'share'){
+      try{
+        await navigator.clipboard.writeText(shareLink.value);
+        shareToast.textContent = 'Link copiado! Cole no WhatsApp, Insta ou onde quiser.';
+      }catch{
+        shareLink.select(); shareLink.setSelectionRange(0, 99999);
+        try{ document.execCommand('copy'); shareToast.textContent = 'Link copiado!'; }
+        catch{ shareToast.textContent = 'Selecione o link acima e copie manualmente.'; }
+      }
+      // Web Share API para mobile (nativo)
+      if(navigator.share){
+        try{ await navigator.share({ title: 'Minha playlist RunBeat', text: 'Corra comigo com essa trilha 🎧', url: shareLink.value }); }catch{}
+      }
+    } else {
+      // import mode: adiciona nomes como placeholders na playlist
+      const startEmpty = playlist.length === 0;
+      pendingImport.forEach(n=>{
+        playlist.push({ name: n, url: '', placeholder: true });
+      });
+      renderPlaylist();
+      $('trackArtist').textContent = `${pendingImport.length} sugestão(ões) importada(s). Adicione os arquivos.`;
+      if(startEmpty){ /* não tocar placeholders */ }
+      closeShareModal();
+    }
+  });
+
+  $('sharePlaylistBtn').addEventListener('click', openShareView);
+  $('importPlaylistBtn').addEventListener('click', ()=>{
+    const raw = prompt('Cole aqui o link da playlist compartilhada:');
+    if(!raw) return;
+    const m = raw.match(/[#?&]playlist=([A-Za-z0-9\-_]+)/);
+    const code = m ? m[1] : raw.trim();
+    const names = decodePlaylist(code);
+    if(!names || names.length === 0){
+      alert('Link inválido ou vazio.');
+      return;
+    }
+    openImportView(names);
+  });
+
+  // Auto-detecta playlist compartilhada na URL ao abrir o app
+  // Usamos o evento 'load' porque em alguns ambientes (ex: preview via proxy)
+  // location.hash só fica disponível após a página terminar de carregar.
+  function checkSharedPlaylistInUrl(){
+    const m = location.hash.match(/playlist=([A-Za-z0-9\-_]+)/);
+    if(!m) return;
+    const names = decodePlaylist(m[1]);
+    // limpa o hash para não abrir de novo em refresh
+    history.replaceState(null, '', location.pathname + location.search);
+    if(names && names.length){
+      setTimeout(()=> openImportView(names), 300);
+    }
+  }
+  if(document.readyState === 'complete'){
+    checkSharedPlaylistInUrl();
+  } else {
+    window.addEventListener('load', checkSharedPlaylistInUrl);
+  }
 
   $('playPauseBtn').addEventListener('click', ()=>{
     if(currentIndex === -1){
